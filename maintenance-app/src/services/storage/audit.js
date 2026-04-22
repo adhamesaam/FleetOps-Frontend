@@ -1,7 +1,5 @@
-const AUDIT_STORAGE_KEY = 'fleetops_audit';
-const initialAuditMockData = [];
-
-const initialMockData = [
+export const AUDIT_STORAGE_KEY = 'fleetops_audit';
+export const initialAuditMockData = [
     {
         id: "LOG-2026-88",
         userId: "ADM-001",
@@ -63,24 +61,3 @@ const initialMockData = [
         newValue: { orderId: "ORD-9092", items: 450, priority: "High" }
     }
 ];
-
-// Fallback for older synchronous calls
-export let auditMockData = [...initialMockData];
-
-const delay = (ms = 100) => new Promise(resolve => setTimeout(resolve, ms));
-
-/**
- * Fetch all audit logs
- */
-async function getAuditLogs() {
-    await delay();
-    const stored = localStorage.getItem(AUDIT_STORAGE_KEY);
-    if (!stored) {
-        localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(initialMockData));
-        auditMockData = JSON.parse(JSON.stringify(initialMockData));
-        return auditMockData;
-    }
-    auditMockData = JSON.parse(stored);
-    return auditMockData;
-}
-export { AUDIT_STORAGE_KEY, initialAuditMockData, getAuditLogs };
