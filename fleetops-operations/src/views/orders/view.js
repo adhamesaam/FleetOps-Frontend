@@ -2,7 +2,7 @@ import OrdersApi from "../../services/api/orders.js";
 import {
     createIcons,
     icons,
-} from "https://unpkg.com/lucide@latest/dist/esm/lucide.js";
+} from "/node_modules/lucide/dist/esm/lucide.mjs";
 
 let cleanupFns = [];
 let state = null;
@@ -453,6 +453,14 @@ function renderAddModal() {
         )
         .join("");
 
+    const paymentOptions = OrdersApi.getPaymentOptions()
+        .map(
+            (option) => `
+                <option value="${option}" ${form.paymentType === option ? "selected" : ""}>${option}</option>
+            `,
+        )
+        .join("");
+
     return `
         <div class="modal-overlay" data-modal-close="overlay">
             <section class="modal-panel modal-panel--compact" role="dialog" aria-modal="true" aria-label="Add order">
@@ -482,7 +490,7 @@ function renderAddModal() {
                             </label>
                             <label>
                                 <span class="label">Payment</span>
-                                <input name="paymentType" value="${form.paymentType}" required />
+                                <select name="paymentType" required>${paymentOptions}</select>
                             </label>
                             <label class="full-span">
                                 <span class="label">Address</span>

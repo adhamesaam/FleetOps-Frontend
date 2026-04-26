@@ -1,5 +1,6 @@
 import {
     IMPORT_NOTE,
+    ORDER_PAYMENT_OPTIONS,
     ORDER_PRIORITY_OPTIONS,
     ORDER_STATUS_OPTIONS,
     ordersSeedData,
@@ -23,6 +24,10 @@ function getPriorityOptions() {
     return [...ORDER_PRIORITY_OPTIONS];
 }
 
+function getPaymentOptions() {
+    return [...ORDER_PAYMENT_OPTIONS];
+}
+
 function getImportNote() {
     return IMPORT_NOTE;
 }
@@ -37,7 +42,9 @@ function createOrder(payload) {
     const priority = ORDER_PRIORITY_OPTIONS.includes(payload.priority)
         ? payload.priority
         : "Normal";
-    const paymentType = payload.paymentType?.trim() || "Prepaid";
+    const paymentType = ORDER_PAYMENT_OPTIONS.includes(payload.paymentType)
+        ? payload.paymentType
+        : "Prepaid";
     const paymentWindow = payload.paymentWindow?.trim() || "09:00-12:00";
     const weightKg = Number(payload.weightKg) || 0;
     const volumeM3 = Number(payload.volumeM3) || 0;
@@ -146,6 +153,7 @@ const OrdersApi = {
     getImportNote,
     getOrderById,
     getOrders,
+    getPaymentOptions,
     getPriorityOptions,
     getStatusOptions,
     importOrders,

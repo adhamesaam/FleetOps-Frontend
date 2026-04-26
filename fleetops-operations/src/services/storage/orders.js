@@ -14,6 +14,8 @@ export const ORDER_STATUS_OPTIONS = [
 
 export const ORDER_PRIORITY_OPTIONS = ["Normal", "Express"];
 
+export const ORDER_PAYMENT_OPTIONS = ["Prepaid", "COD"];
+
 export const IMPORT_NOTE =
     "Live tracking links will be auto-generated and sent to customers via SMS, WhatsApp, and Email upon import.";
 

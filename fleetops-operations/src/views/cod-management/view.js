@@ -2,7 +2,7 @@ import CodManagementApi from "../../services/api/cod-management.js";
 import {
     createIcons,
     icons,
-} from "https://unpkg.com/lucide@latest/dist/esm/lucide.js";
+} from "/node_modules/lucide/dist/esm/lucide.mjs";
 
 let cleanupFns = [];
 let state = null;

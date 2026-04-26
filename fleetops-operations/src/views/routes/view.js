@@ -2,10 +2,11 @@ import RoutesApi from "../../services/api/routes.js";
 import {
     createIcons,
     icons,
-} from "https://unpkg.com/lucide@latest/dist/esm/lucide.js";
+} from "/node_modules/lucide/dist/esm/lucide.mjs";
 
 let cleanupFns = [];
 let state = null;
+let routePlaybackTimer = null;
 
 const PAGE_SIZE = 10;
 
@@ -22,6 +23,7 @@ export function mount() {
 
     bindEvents();
     renderPage();
+    openRouteFromLiveMonitoring();
 }
 
 export function unmount() {
@@ -397,6 +399,11 @@ function renderRouteTab(route, tab) {
     }
 
     if (tab === "playback") {
+        const frame = state.modal?.playbackFrame ?? 1;
+        const speed = state.modal?.playbackSpeed ?? 1;
+        const isPlaying = state.modal?.isPlaying ?? false;
+        const playLabel = isPlaying ? "Pause" : "Play";
+
         return `
             <section class="route-banner">
                 <div class="route-banner__left">
@@ -409,7 +416,7 @@ function renderRouteTab(route, tab) {
                 <div>
                     <div class="route-playback">
                         <div class="playback-grid"></div>
-                        ${renderPlaybackMap(route)}
+                        ${renderPlaybackMap(route, frame)}
                         <div class="playback-legend">
                             <span class="legend-chip"><span class="legend-dot legend-dot--purple"></span>Depot</span>
                             <span class="legend-chip"><span class="legend-dot legend-dot--green"></span>Delivered</span>
@@ -430,18 +437,18 @@ function renderRouteTab(route, tab) {
                         <span>Break</span>
                     </div>
                     <div class="route-playback-controls">
-                        <button class="play-btn" type="button">
-                            <i data-lucide="play"></i>
-                            <span>Play</span>
+                        <button class="play-btn" type="button" data-action="toggle-play">
+                            <i data-lucide="${isPlaying ? "pause" : "play"}"></i>
+                            <span>${playLabel}</span>
                         </button>
                         <div class="playback-speed">
                             <span>Speed</span>
-                            <button class="speed-chip is-active" type="button">1x</button>
-                            <button class="speed-chip" type="button">2x</button>
-                            <button class="speed-chip" type="button">5x</button>
-                            <button class="speed-chip" type="button">10x</button>
+                            <button class="speed-chip ${speed === 1 ? "is-active" : ""}" type="button" data-action="change-speed" data-speed="1">1x</button>
+                            <button class="speed-chip ${speed === 2 ? "is-active" : ""}" type="button" data-action="change-speed" data-speed="2">2x</button>
+                            <button class="speed-chip ${speed === 5 ? "is-active" : ""}" type="button" data-action="change-speed" data-speed="5">5x</button>
+                            <button class="speed-chip ${speed === 10 ? "is-active" : ""}" type="button" data-action="change-speed" data-speed="10">10x</button>
                         </div>
-                        <span>Frame 1 / ${route.playbackFrames} - ${route.eventTime}</span>
+                        <span>Frame ${frame} / ${route.playbackFrames} - ${route.eventTime}</span>
                     </div>
                 </div>
                 <div class="route-playback-panel">
@@ -495,9 +502,10 @@ function renderRouteTab(route, tab) {
     `;
 }
 
-function renderPlaybackMap(route) {
+function renderPlaybackMap(route, frame = 1) {
     const points = route.linePoints;
     const step = 100 / (points.length + 1);
+    const frameIndex = Math.min(points.length - 1, Math.max(0, frame - 1));
 
     return `
         <div class="playback-path">
@@ -505,9 +513,10 @@ function renderPlaybackMap(route) {
                 .map((point, index) => {
                     const left = 10 + step * index;
                     const top = 70 - point;
-                    const isVehicle = index === points.length - 2;
+                    const isVehicle = index === frameIndex;
+                    const isDelivered = index < frameIndex;
 
-                    return `<span class="playback-node ${isVehicle ? "is-vehicle" : ""}" style="left:${left}%; top:${top}%"></span>`;
+                    return `<span class="playback-node ${isVehicle ? "is-vehicle" : ""} ${isDelivered ? "is-delivered" : ""}" style="left:${left}%; top:${top}%"></span>`;
                 })
                 .join("")}
         </div>
@@ -703,6 +712,7 @@ function handleModalClick(event) {
     const overlay = event.target.closest("[data-modal-close='overlay']");
     const closeButton = event.target.closest("[data-modal-close='button']");
     const tabButton = event.target.closest("[data-tab]");
+    const actionButton = event.target.closest("[data-action]");
 
     if (event.target === overlay || closeButton) {
         closeModal();
@@ -716,6 +726,28 @@ function handleModalClick(event) {
         };
         renderModal();
         refreshIcons();
+        return;
+    }
+
+    if (actionButton) {
+        const action = actionButton.dataset.action;
+
+        if (action === "toggle-play") {
+            if (state.modal?.isPlaying) {
+                stopRoutePlayback();
+            } else {
+                startRoutePlayback();
+            }
+            return;
+        }
+
+        if (action === "change-speed") {
+            const speed = Number(actionButton.dataset.speed);
+            if (!Number.isNaN(speed)) {
+                setRoutePlaybackSpeed(speed);
+            }
+            return;
+        }
     }
 }
 
@@ -731,6 +763,60 @@ function handleModalSubmit(event) {
     state.currentPage = 1;
     closeModal();
     renderPage();
+}
+
+function clearRoutePlaybackTimer() {
+    if (routePlaybackTimer) {
+        window.clearInterval(routePlaybackTimer);
+        routePlaybackTimer = null;
+    }
+}
+
+function startRoutePlayback() {
+    if (!state.modal || !state.modal.routeId) {
+        return;
+    }
+
+    const route = RoutesApi.getRouteById(state.modal.routeId);
+    if (!route) {
+        return;
+    }
+
+    state.modal.isPlaying = true;
+    clearRoutePlaybackTimer();
+
+    routePlaybackTimer = window.setInterval(() => {
+        const maxFrame = Math.max(1, route.playbackFrames);
+        const nextFrame = state.modal.playbackFrame >= maxFrame ? 1 : state.modal.playbackFrame + state.modal.playbackSpeed;
+        state.modal.playbackFrame = Math.min(nextFrame, maxFrame);
+        renderModal();
+        refreshIcons();
+    }, 500);
+}
+
+function stopRoutePlayback() {
+    if (!state.modal) {
+        return;
+    }
+
+    state.modal.isPlaying = false;
+    clearRoutePlaybackTimer();
+    renderModal();
+    refreshIcons();
+}
+
+function setRoutePlaybackSpeed(speed) {
+    if (!state.modal) {
+        return;
+    }
+
+    state.modal.playbackSpeed = speed;
+    if (state.modal.isPlaying) {
+        startRoutePlayback();
+    } else {
+        renderModal();
+        refreshIcons();
+    }
 }
 
 function handleExport() {
@@ -763,13 +849,31 @@ function handleExport() {
 }
 
 function openDetailsModal(routeId) {
+    clearRoutePlaybackTimer();
+
     state.modal = {
         routeId,
         tab: "stops",
         type: "details",
+        playbackFrame: 1,
+        playbackSpeed: 1,
+        isPlaying: false,
     };
     renderModal();
     refreshIcons();
+}
+
+function openRouteFromLiveMonitoring() {
+    const routeId = sessionStorage.getItem("fleetops-live-selected-route");
+    if (!routeId) {
+        return;
+    }
+
+    sessionStorage.removeItem("fleetops-live-selected-route");
+    const route = RoutesApi.getRouteById(routeId);
+    if (route) {
+        openDetailsModal(routeId);
+    }
 }
 
 function openNewRouteModal() {
@@ -780,6 +884,7 @@ function openNewRouteModal() {
 
 function closeModal() {
     state.modal = null;
+    clearRoutePlaybackTimer();
     renderModal();
 }
 
