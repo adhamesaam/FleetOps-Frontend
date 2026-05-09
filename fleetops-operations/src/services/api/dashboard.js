@@ -128,11 +128,16 @@ async function getFleetData() {
 
     // Map backend route fields → view fields
     return rows.map((r) => {
+      const routeName = r.route_name || r.route_description || "—";
+
       const location =
-        [r.origin, r.destination].filter(Boolean).join(" → ") ||
-        r.route_name ||
-        r.zone ||
-        "—";
+        [r.origin, r.destination].filter(Boolean).join(" → ") || r.zone || "—";
+
+      const vehicle =
+        r.vehicle?.VehicleLicense ||
+        r.vehicle?.VehicleModel ||
+        r.vehicle_id ||
+        "Unknown";
 
       const rawEta = r.scheduled_end_time ?? r.actual_end_time ?? null;
       const eta = rawEta
@@ -154,12 +159,12 @@ async function getFleetData() {
               : 0);
 
       const driver =
-        r.driver?.user?.name ?? r.driver_name ?? r.driver?.name ?? "Unassigned";
+        r.driver?.user?.name ?? r.driver?.name ?? r.driver_name ?? "Unassigned";
 
       const routeId = r.route_id
         ? `RT-${String(r.route_id).padStart(4, "0")}`
         : (r.id ?? "—");
-      return { routeId, location, driver, progress, eta };
+      return { routeId, routeName, location, driver, vehicle, progress, eta };
     });
   } catch (err) {
     console.error("[Dashboard] getFleetData() failed:", err?.message ?? err);

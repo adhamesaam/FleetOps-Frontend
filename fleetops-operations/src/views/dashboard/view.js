@@ -99,7 +99,7 @@ function renderFleetTable(root, page) {
   if (pageRows.length === 0) {
     tbody.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align:center; padding:2rem; color:var(--color-text-muted);">
+                <td colspan="7" style="text-align:center; padding:2rem; color:var(--color-text-muted);">
                     No active routes at this time.
                 </td>
             </tr>`;
@@ -109,8 +109,10 @@ function renderFleetTable(root, page) {
         (row) => `
                 <tr>
                     <td><strong style="color:var(--color-primary);">${row.routeId}</strong></td>
+                    <td>${row.routeName}</td>
                     <td>${row.location}</td>
                     <td>${row.driver}</td>
+                    <td>${row.vehicle}</td>
                     <td>${buildProgressCell(row.progress)}</td>
                     <td><span style="font-weight:600;color:var(--color-text-title)">${row.eta}</span></td>
                 </tr>`,
