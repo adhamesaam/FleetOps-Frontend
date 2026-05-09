@@ -275,7 +275,7 @@ function initNotificationBell() {
  * Entry point. Fetches live data from the backend API and renders the dashboard.
  * Call this after inserting view.html into the DOM.
  */
-export async function initDashboard() {
+export function initDashboard() {
   // Show loading skeletons while we wait for the API
   const kpiGrid    = document.getElementById('kpi-grid');
   const alertsSec  = document.getElementById('alerts-section');
@@ -292,28 +292,28 @@ export async function initDashboard() {
   // Wire up notification bell immediately (no API dependency)
   initNotificationBell();
 
-  try {
-    const {
+  DashboardApi.getDashboardData()
+    .then(({
       kpiData,
       alertsData,
       workOrdersData,
       vehiclesAttentionData,
       upcomingMaintenanceData,
-    } = await DashboardApi.getDashboardData();
-
-    renderKPICards(kpiData);
-    renderAlerts(alertsData);
-    renderWorkOrdersTable(workOrdersData);
-    renderVehiclesAttention(vehiclesAttentionData);
-    renderUpcomingMaintenance(upcomingMaintenanceData);
-  } catch (err) {
-    console.error('[Dashboard] initDashboard() failed:', err);
-    showError(kpiGrid,   'Failed to load dashboard data.');
-    showError(alertsSec, '');
-    if (wTbody) wTbody.innerHTML = `<tr><td colspan="6" class="dashboard-error">Failed to load work orders.</td></tr>`;
-    showError(vList, 'Failed to load vehicles.');
-    showError(mList, 'Failed to load schedule.');
-  }
+    }) => {
+      renderKPICards(kpiData);
+      renderAlerts(alertsData);
+      renderWorkOrdersTable(workOrdersData);
+      renderVehiclesAttention(vehiclesAttentionData);
+      renderUpcomingMaintenance(upcomingMaintenanceData);
+    })
+    .catch((err) => {
+      console.error('[Dashboard] initDashboard() failed:', err);
+      showError(kpiGrid,   'Failed to load dashboard data.');
+      showError(alertsSec, '');
+      if (wTbody) wTbody.innerHTML = `<tr><td colspan="6" class="dashboard-error">Failed to load work orders.</td></tr>`;
+      showError(vList, 'Failed to load vehicles.');
+      showError(mList, 'Failed to load schedule.');
+    });
 }
 
 setTimeout(initDashboard, 100);
