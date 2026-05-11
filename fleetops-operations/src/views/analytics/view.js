@@ -269,40 +269,73 @@ async function renderMonthlyChart(root) {
   if (!container) return;
 
   const data = await AnalyticsStorage.getMonthlyChartData();
-  if (!data.revenue || data.revenue.length === 0) return;
 
-  const maxVal = Math.max(...data.revenue);
+  if (!data.labels || data.labels.length === 0) {
+    container.innerHTML = `<div class="empty-state">No monthly data available</div>`;
+    return;
+  }
+
+  const maxVal =
+    Math.max(
+      ...data.revenue,
+      ...data.loss.map(Math.abs),
+      ...data.profit.map(Math.abs),
+    ) || 1;
 
   container.innerHTML = data.labels
     .map((label, i) => {
-      const revenue = data.revenue[i];
-      const cost = data.costs[i];
-      const revHeight = maxVal > 0 ? (revenue / maxVal) * 100 : 0;
-      const costHeight = maxVal > 0 ? (cost / maxVal) * 100 : 0;
+      const revenue = data.revenue[i] || 0;
+      const loss = data.loss[i] || 0;
+      const profit = data.profit[i] || 0;
 
-      const profit = revenue - cost;
-      const profitPercentage =
-        revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : 0;
+      const revHeight = (revenue / maxVal) * 100;
+      const lossHeight = (loss / maxVal) * 100;
+      const profitHeight = (Math.abs(profit) / maxVal) * 100;
+
       const isProfit = profit >= 0;
-      const colorClass = isProfit ? "profit-green" : "loss-red";
+      const changeClass = isProfit ? "profit-green" : "loss-red";
       const sign = isProfit ? "+" : "";
 
       return `
-      <div class="bar-group">
-        <div class="bars">
-          <div class="bar bar-revenue" style="height: ${revHeight}%;" title="Revenue: $${revenue.toLocaleString()}"></div>
-          <div class="bar bar-cost" style="height: ${costHeight}%;" title="Cost: $${cost.toLocaleString()}"></div>
+        <div class="bar-group">
+          <div class="bars" style="position: relative; height: 240px;">
+            
+            <!-- Revenue Bar -->
+            <div class="bar bar-revenue" 
+                style="height: ${revHeight}%; background: #10b981;"
+                title="Revenue: ${data.currency} ${revenue.toLocaleString()}">
+            </div>
+
+            <!-- Loss Bar (from bottom) -->
+            <div class="bar bar-loss" 
+                style="height: ${lossHeight}%; background: #ef4444; position: absolute; bottom: 0;"
+                title="Loss: ${data.currency} ${loss.toLocaleString()}">
+            </div>
+
+            <!-- Profit Indicator -->
+            <div class="bar bar-profit ${isProfit ? "profit-green" : "loss-red"}" 
+                style="height: ${profitHeight}%; 
+                        ${isProfit ? "bottom: " + lossHeight + "%;" : "bottom: 0;"};"
+                title="${isProfit ? "Profit" : "Loss"}: ${data.currency} ${Math.abs(profit).toLocaleString()}">
+            </div>
+          </div>
+
+          <span class="bar-label">${label}</span>
+          
+          <!-- Profit/Loss Change -->
+          <div class="bar-change ${changeClass}">
+            ${sign}${profit.toLocaleString()} ${data.currency}
+            <span class="change-perc">
+              (${sign}${(revenue > 0 ? (profit / revenue) * 100 : 0).toFixed(1)}%)
+            </span>
+          </div>
         </div>
-        <span class="bar-label">${label}</span>
-        <span class="bar-profit ${colorClass}">${sign}${profitPercentage}%</span>
-      </div>
-    `;
+      `;
     })
     .join("");
 
   refreshIcons();
 }
-
 async function renderFleetStatus(root) {
   const donut = root.querySelector("#fleet-donut");
   const legend = root.querySelector("#fleet-legend");

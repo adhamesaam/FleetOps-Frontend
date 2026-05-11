@@ -57,40 +57,32 @@ async function getMonthlyChartData() {
       },
     );
 
-    if (response.status === 204) {
-      console.warn("Monthly chart API returned 204 No Content.");
-      return { labels: [], revenue: [], costs: [], profit: [] };
-    }
-
-    if (!response || !response.data) {
-      console.warn("Monthly chart API response is missing data.");
-      return { labels: [], revenue: [], costs: [], profit: [] };
+    if (response.status === 204 || !response?.data?.data) {
+      return { labels: [], revenue: [], loss: [], profit: [], currency: "EGP" };
     }
 
     const payload = response.data.data;
-    if (!payload || typeof payload !== "object") {
-      console.warn("Monthly chart API returned unexpected payload.");
-      return { labels: [], revenue: [], costs: [], profit: [] };
-    }
 
     const labels = Array.isArray(payload.labels) ? payload.labels : [];
-    const revenue = Array.isArray(payload.revenue)
-      ? payload.revenue
-      : Array.isArray(payload.data)
-        ? payload.data
-        : [];
-    const costs = Array.isArray(payload.costs)
-      ? payload.costs
-      : Array(labels.length).fill(0);
-    const profit = revenue.map((value, index) => {
-      const cost = costs[index] || 0;
-      return value - cost;
+    const revenue = Array.isArray(payload.revenue) ? payload.revenue : [];
+    const loss = Array.isArray(payload.loss) ? payload.loss : [];
+
+    // Calculate profit
+    const profit = revenue.map((rev, i) => {
+      const los = loss[i] || 0;
+      return rev - los;
     });
 
-    return { labels, revenue, costs, profit, currency: payload.currency || "" };
+    return {
+      labels,
+      revenue,
+      loss,
+      profit,
+      currency: payload.currency || "EGP",
+    };
   } catch (e) {
     console.error("Failed to fetch chart data", e);
-    return { labels: [], revenue: [], costs: [], profit: [] };
+    return { labels: [], revenue: [], loss: [], profit: [], currency: "EGP" };
   }
 }
 
