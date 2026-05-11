@@ -50,15 +50,87 @@ export function mount(root) {
     });
   });
 
-  exportButton = root.querySelector("#routes-export-btn");
-  exportHandler = () => handleExport(root);
-  exportButton?.addEventListener("click", exportHandler);
+  if (window.location.pathname === "/analytics") {
+    exportButton = root.querySelector(
+      "#routes-export-btn, #export-btn, .export-button",
+    );
+    exportHandler = (event) => {
+      event.preventDefault();
+      handleExport(root);
+    };
+    exportButton?.addEventListener("click", exportHandler);
+  }
 }
 
 export function unmount() {
   exportButton?.removeEventListener("click", exportHandler);
   exportButton = null;
   exportHandler = null;
+}
+
+function getActiveAnalyticsTab(root) {
+  const activeTabBtn = root.querySelector(".tab-btn.active");
+  return activeTabBtn?.dataset.tab || "kpi";
+}
+
+function printKPISection(root) {
+  const kpiSection = root.querySelector("#analytics-kpi-grid");
+  if (!kpiSection) return;
+
+  const printWindow = window.open("", "_blank", "width=900,height=700");
+  if (!printWindow) return;
+
+  const styles = `
+    <style>
+      :root {
+        --color-primary: #f46639;
+        --font-family-display: 'Plus Jakarta Sans', sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: var(--font-family-display);
+        color: #111;
+        background: #fff;
+      }
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+      .kpi-card {
+        border-radius: 16px;
+        padding: 20px;
+        background: #fff;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+        border: 1px solid rgba(15, 23, 42, 0.04);
+      }
+      .kpi-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+      .kpi-value {
+        font-size: 2rem;
+        font-weight: 700;
+      }
+      .kpi-change.positive {
+        color: #10b981;
+      }
+      .kpi-change.negative {
+        color: #ef4444;
+      }
+    </style>
+  `;
+
+  printWindow.document.write(
+    `<!doctype html><html><head><title>Analytics KPI</title>${styles}</head><body>${kpiSection.innerHTML}</body></html>`,
+  );
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+  printWindow.close();
 }
 
 window.__refreshIcons = () => createIcons({ icons });
@@ -75,162 +147,134 @@ function buildCsvRow(values) {
   return values.map(csvEscape).join(",");
 }
 
+function downloadCsv(rows, fileName) {
+  const csv = rows.map(buildCsvRow).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 async function handleExport(root) {
+  const activeTab = getActiveAnalyticsTab(root);
   const range =
     root.querySelector(".date-btn.is-active")?.dataset.range || "30d";
 
+  if (activeTab === "kpi") {
+    printKPISection(root);
+    return;
+  }
+
   try {
-    const [
-      kpiData,
-      chartData,
-      fleetData,
-      driverData,
-      co2Data,
-      fuelData,
-      maintenanceData,
-    ] = await Promise.all([
-      AnalyticsStorage.getKpiData(range),
-      AnalyticsStorage.getMonthlyChartData(),
-      AnalyticsStorage.getFleetStatus(),
-      AnalyticsStorage.getDriverPerformance(),
-      AnalyticsStorage.getCO2ReportData(),
-      AnalyticsStorage.getFuelAuditData(),
-      AnalyticsStorage.getMaintenanceCostData(),
-    ]);
+    const [fleetData, driverData, co2Data, fuelData, maintenanceData] =
+      await Promise.all([
+        AnalyticsStorage.getFleetStatus(),
+        AnalyticsStorage.getDriverPerformance(),
+        AnalyticsStorage.getCO2ReportData(),
+        AnalyticsStorage.getFuelAuditData(),
+        AnalyticsStorage.getMaintenanceCostData(),
+      ]);
 
     const rows = [];
-    rows.push(["Analytics Export"]);
-    rows.push([`Range: ${range}`]);
-    rows.push([]);
+    let fileName = `analytics-${activeTab}-${range}.csv`;
 
-    if (kpiData.length > 0) {
-      rows.push(["KPIs"]);
-      rows.push(["Label", "Value", "Change"]);
-      kpiData.forEach((kpi) =>
-        rows.push([kpi.label, kpi.value, `${kpi.change}%`]),
-      );
-      rows.push([]);
-    }
-
-    if (chartData?.labels?.length > 0) {
-      rows.push(["Monthly Chart"]);
-      rows.push(["Month", "Revenue", "Cost", "Profit"]);
-      chartData.labels.forEach((label, index) => {
-        const revenue = chartData.revenue?.[index] ?? "";
-        const cost = chartData.costs?.[index] ?? "";
-        const profit =
-          typeof revenue === "number" && typeof cost === "number"
-            ? revenue - cost
-            : "";
-        rows.push([label, revenue, cost, profit]);
-      });
-      rows.push([]);
-    }
-
-    if (fleetData.length > 0) {
-      rows.push(["Fleet Status"]);
-      rows.push(["Label", "Count"]);
-      fleetData.forEach((item) => rows.push([item.label, item.count]));
-      rows.push([]);
-    }
-
-    if (driverData.length > 0) {
-      rows.push(["Driver Performance"]);
-      rows.push(["Driver", "Speed", "Fuel", "Rating", "Score"]);
-      driverData.forEach((driver) =>
+    switch (activeTab) {
+      case "driver":
+        rows.push(["Driver Performance"]);
+        rows.push(["Rank", "Driver", "Speed", "Fuel", "Rating", "Score"]);
+        driverData.forEach((driver, index) =>
+          rows.push([
+            `#${index + 1}`,
+            driver.name,
+            `${driver.speed}%`,
+            `${driver.fuel}%`,
+            driver.rating,
+            driver.score,
+          ]),
+        );
+        break;
+      case "fleet":
+        rows.push(["Fleet Utilization"]);
+        rows.push(["Label", "Count"]);
+        fleetData.forEach((item) => rows.push([item.label, item.count]));
+        break;
+      case "co2":
+        rows.push(["CO2 Report"]);
+        rows.push(["Vehicle", "Type", "Emissions", "Reduction", "Status"]);
+        co2Data.forEach((row) =>
+          rows.push([
+            row.vehicle,
+            row.type,
+            row.emissions,
+            `${row.reduction}%`,
+            row.status,
+          ]),
+        );
+        break;
+      case "fuel":
+        rows.push(["Fuel Audit"]);
         rows.push([
-          driver.name,
-          `${driver.speed}%`,
-          `${driver.fuel}%`,
-          driver.rating,
-          driver.score,
-        ]),
-      );
-      rows.push([]);
-    }
-
-    if (co2Data.length > 0) {
-      rows.push(["CO2 Report"]);
-      rows.push(["Vehicle", "Type", "Emissions", "Reduction", "Status"]);
-      co2Data.forEach((row) =>
+          "Vehicle",
+          "GPS Distance",
+          "Expected",
+          "Actual",
+          "Discrepancy",
+          "Status",
+        ]);
+        fuelData.forEach((row) =>
+          rows.push([
+            row.vehicle,
+            row.gpsDistance,
+            row.expected,
+            row.actual,
+            row.discrepancy,
+            row.status,
+          ]),
+        );
+        break;
+      case "maintenance":
+        rows.push(["Maintenance Cost Summary"]);
+        rows.push(["Total", "Preventive", "Reactive", "Currency"]);
         rows.push([
-          row.vehicle,
-          row.type,
-          row.emissions,
-          `${row.reduction}%`,
-          row.status,
-        ]),
-      );
-      rows.push([]);
-    }
-
-    if (fuelData.length > 0) {
-      rows.push(["Fuel Audit"]);
-      rows.push([
-        "Vehicle",
-        "GPS Distance",
-        "Expected",
-        "Actual",
-        "Discrepancy",
-        "Status",
-      ]);
-      fuelData.forEach((row) =>
+          maintenanceData.summary.total,
+          maintenanceData.summary.preventive,
+          maintenanceData.summary.reactive,
+          maintenanceData.summary.currency,
+        ]);
+        rows.push([]);
+        rows.push(["Maintenance Cost Table"]);
         rows.push([
-          row.vehicle,
-          row.gpsDistance,
-          row.expected,
-          row.actual,
-          row.discrepancy,
-          row.status,
-        ]),
-      );
-      rows.push([]);
+          "Vehicle",
+          "Service",
+          "Date",
+          "Parts",
+          "Labor",
+          "Total",
+          "Status",
+        ]);
+        (maintenanceData.table || []).forEach((row) =>
+          rows.push([
+            row.vehicle,
+            row.service,
+            row.date,
+            row.parts,
+            row.labor,
+            row.total,
+            row.status,
+          ]),
+        );
+        break;
+      default:
+        rows.push(["No export data available for this tab."]);
+        break;
     }
 
-    if (maintenanceData?.summary) {
-      rows.push(["Maintenance Cost Summary"]);
-      rows.push(["Total", "Preventive", "Reactive", "Currency"]);
-      rows.push([
-        maintenanceData.summary.total,
-        maintenanceData.summary.preventive,
-        maintenanceData.summary.reactive,
-        maintenanceData.summary.currency,
-      ]);
-      rows.push([]);
-      rows.push(["Maintenance Cost Table"]);
-      rows.push([
-        "Vehicle",
-        "Service",
-        "Date",
-        "Parts",
-        "Labor",
-        "Total",
-        "Status",
-      ]);
-      (maintenanceData.table || []).forEach((row) =>
-        rows.push([
-          row.vehicle,
-          row.service,
-          row.date,
-          row.parts,
-          row.labor,
-          row.total,
-          row.status,
-        ]),
-      );
-      rows.push([]);
-    }
-
-    const csv = rows.map(buildCsvRow).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `analytics-export-${range}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadCsv(rows, fileName);
   } catch (error) {
     console.error("Analytics export failed:", error);
   }
